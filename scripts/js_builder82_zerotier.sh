@@ -1,161 +1,243 @@
 #!/bin/bash
 
-function valid () {
-  EXITCODE=$?
-  if [ ${EXITCODE} -ne 0 ]; then
-      cat /tmp/lastcommandoutput.txt
-      if [ -z $1 ]; then
-        echo "Error in last step"
-      else
-        echo $1
-      fi
-      exit ${EXITCODE}
-  fi
+ztnetwork=""
+gighome="~/gig"
+ask=1
+verbose=0
+dimage="jumpscale/ubuntu-zerotier"
+JSBRANCH="8.2.0"
+advanced=0
+logfile="/dev/null"
+
+error_handler() {
+    EXITCODE=$?
+
+    if [ -z $2 ]; then
+        echo "[-] line $1: unexpected error"
+        exit ${EXITCODE}
+    else
+        echo $2
+    fi
+
+    exit 1
 }
 
-if [ -z $1 ]; then
-  echo "Usage: js82_builder_zerotier.sh <ZEROTIERNWID>"
-  echo
-  echo "  ZEROTIERNWID: The zerotier network in which the jumpscale should join."
-  echo
-  exit 1
-fi
-ZEROTIERNWID=$1
+die() {
+    echo "[-] $1"
+    exit 1
+}
 
-if (( `docker ps -a | grep js82 | wc -l` > 0 )); then
-  echo "Cleaning up existing container instance"
-  docker rm --force js82 > /tmp/lastcommandoutput.txt 2>&1
-  valid
-fi
+isWindows() {
+    if [ ! -e /proc/version ]; then
+        return 0
+    fi
 
-if [ -e /proc/version ] && grep -q Microsoft /proc/version; then
-  # Windows subsystem 4 linux
-  WINDOWSUSERNAME=`ls -ail /mnt/c/Users/ | grep drwxrwxrwx | grep -v Public | grep -v Default | grep -v '\.\.'`
-  WINDOWSUSERNAME=${WINDOWSUSERNAME##* }
-  GIGHOME=/mnt/c/Users/${WINDOWSUSERNAME}/gig
-else
-  # Native Linux or MacOSX
-  GIGHOME=~/gig
-fi
-mkdir -p ${GIGHOME}/data > /tmp/lastcommandoutput.txt 2>&1
-valid
-mkdir -p ${GIGHOME}/code > /tmp/lastcommandoutput.txt 2>&1
-valid
-mkdir -p ${GIGHOME}/zerotier-one > /tmp/lastcommandoutput.txt 2>&1
-valid
-# Test if current user can write in the mounted directories
-touch ${GIGHOME}/data/.write_test > /tmp/lastcommandoutput.txt 2>&1
-valid "Aborting! Docker needs to have write access in your mounted directories.\n Could not write to ${OPTVAR}/data/.write_test"
-rm ${GIGHOME}/data/.write_test > /tmp/lastcommandoutput.txt 2>&1
-touch ${GIGHOME}/zerotier-one/.write_test > /tmp/lastcommandoutput.txt 2>&1
-valid "Aborting! Docker needs to have write access in your mounted directories.\n Could not write to ${OPTVAR}/zerotier-one/.write_test"
-rm ${GIGHOME}/zerotier-one/.write_test > /tmp/lastcommandoutput.txt 2>&1
-touch ${GIGHOME}/code/.write_test > /tmp/lastcommandoutput.txt 2>&1
-valid "Aborting! Docker needs to have write access in your mounted directories.\n Could not write to ${OPTVAR}/zerotier-one/.write_test"
-rm ${GIGHOME}/code/.write_test > /tmp/lastcommandoutput.txt 2>&1
-if [ -e /proc/version ] && grep -q Microsoft /proc/version; then
-  # Windows subsystem 4 linux
-  GIGHOME=c:/Users/${WINDOWSUSERNAME}/gig
-fi
+    match=$(grep -q Microsoft /proc/version)
+    return $?
+}
 
-if ! docker images | grep -q "jumpscale/ubuntu-zerotier"; then
-  echo "Starting docker container"
-  docker run --name ubuntu-zerotier -h ubuntu-zerotier -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGHOME}/code/:/opt/code/ -v ${GIGHOME}/data/:/optvar/data ubuntu:16.04 sleep 365d > /tmp/lastcommandoutput.txt 2>&1
-  valid
+show_usage() {
+    echo "Usage: $0 -z zt-net-id [-v] [-y] [-h] [-a]"
+    echo ""
+    echo "  -z zt-net-id    The zerotier network in which the jumpscale should join"
+    echo "  -v              Enable verbose mode (show commands output)"
+    echo "  -h              Show this help message"
+    echo "  -y              Do not ask for confirmation"
+    echo "  -a              Advanded user mode (host sensible files untouched)"
+    echo ""
+    echo "Environment variable \$GIGPATH is used to define gig root path"
+    echo ""
 
-  echo "Correcting the locales env"
-  docker exec -t ubuntu-zerotier bash -c 'echo -e "export LC_ALL=C.UTF-8\nexport LANG=C.UTF-8" >> /root/.bashrc' > /tmp/lastcommandoutput.txt 2>&1
-  valid
-  docker exec -t ubuntu-zerotier bash -c 'echo -e "export LC_ALL=C.UTF-8\nexport LANG=C.UTF-8" >> /root/.bash_profile' > /tmp/lastcommandoutput.txt 2>&1
-  valid
-  docker exec -t ubuntu-zerotier bash -c 'echo -e "export LC_ALL=C.UTF-8\nexport LANG=C.UTF-8" >> /root/.profile' > /tmp/lastcommandoutput.txt 2>&1
-  valid
+    exit 1
+}
 
-  echo "Installing zerotier"
-  docker exec -t ubuntu-zerotier bash -c "cd && apt-get update && apt-get install -y curl openssh-server git make g++ vim mc localehelper && mkdir /var/run/sshd && git clone https://github.com/zerotier/ZeroTierOne.git && cd ZeroTierOne/ && make && make install" > /tmp/lastcommandoutput.txt 2>&1
-  valid
+info() {
+    echo -e "[+] \033[34;1m${1}: \033[36;1m${2}\033[0m"
+}
 
-  echo "Creating docker init"
-  docker exec -t ubuntu-zerotier bash -c 'echo -e "tmux set-environment -g LC_ALL C.UTF-8\ntmux set-environment -g LANG C.UTF-8\nzerotier-one -d\n/usr/sbin/sshd\nsleep 1\nzerotier-cli join \${ZEROTIERNWID}\n" > /root/init-include.sh' > /tmp/lastcommandoutput.txt 2>&1
-  valid
-  docker exec -t ubuntu-zerotier bash -c 'echo -e "#!/bin/bash\nZEROTIERNWID=\$1\nsource /root/init-include.sh\nsleep 36500d\n" > /root/init.sh' > /tmp/lastcommandoutput.txt 2>&1
-  valid
-  docker exec -t ubuntu-zerotier chmod +x /root/init.sh > /tmp/lastcommandoutput.txt 2>&1
-  valid
+load_settings() {
+    if isWindows; then
+        # Windows subsystem 4 linux
+        WINDOWSUSERNAME=$(ls -ail /mnt/c/Users/ | grep drwxrwxrwx | grep -v Public | grep -v Default | grep -v '\.\.')
+        WINDOWSUSERNAME=${WINDOWSUSERNAME##* }
+        GIGPATH=${GIGPATH:-/mnt/c/Users/${WINDOWSUSERNAME}/gig}
+    else
+        GIGPATH=${GIGPATH:-~/gig}
+    fi
+}
 
-  echo "Creating docker image jumpscale/ubuntu-zerotier"
-  docker commit ubuntu-zerotier jumpscale/ubuntu-zerotier > /tmp/lastcommandoutput.txt 2>&1
-  valid
-  docker rm --force ubuntu-zerotier > /tmp/lastcommandoutput.txt 2>&1
-  valid
-fi
+home_ensure() {
+    mkdir -p ${GIGHOME}/data
+    mkdir -p ${GIGHOME}/code
+    mkdir -p ${GIGHOME}/zerotier-one
 
-echo "Spawning js82 docker container"
-docker run --name js82 -h js82 -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGHOME}/code/:/opt/code/ -v ${GIGHOME}/data/:/optvar/data jumpscale/ubuntu-zerotier /root/init.sh ${ZEROTIERNWID} > /tmp/lastcommandoutput.txt 2>&1
-valid
+    [ -w ${GIGHOME}/data/ ] || die "No write access to ${GIGHOME}/data"
+    [ -w ${GIGHOME}/code/ ] || die "No write access to ${GIGHOME}/code"
+    [ -w ${GIGHOME}/zerotier-one/ ] || die "No write access to ${GIGHOME}/zerotier-one"
+}
 
-echo "Waiting for ip in zerotier network (do not forget to allow the container in your network, and make sure auto assign ip is enabled) ..."
-while :
-do
-  sleep 1
-  ZEROTIERIP=`docker exec -t js82 bash -c "ip -4 addr show zt0 | grep -oP 'inet\s\d+(\.\d+){3}' | sed 's/inet //' | tr -d '\n\r'"`
-  if [ "${ZEROTIERIP}" ]; then
-    echo "Container zerotier ip = ${ZEROTIERIP}"
-    break
-  fi
-done
+docker_prepare() {
+    if docker ps -a --format "{{ .Names }}"  | grep -q js82; then
+        echo "[+] cleaning up existing container instance"
+        docker rm --force js82 > ${logfile}
+    fi
 
-echo "Configuring ssh access"
-docker exec -t js82 bash -c "mkdir /root/.ssh && chmod 700 /root/.ssh"> /tmp/lastcommandoutput.txt 2>&1
-valid
-for i in `ls ~/.ssh/*.pub`
-do
-  KEY=`cat ${i}`
-  docker exec -t js82 bash -c "echo ${KEY} >> /root/.ssh/authorized_keys" > /tmp/lastcommandoutput.txt 2>&1
-  valid
-done
-if [ -e /proc/version ] && grep -q Microsoft /proc/version; then
-  for i in `ls /mnt/c/Users/${WINDOWSUSERNAME}/.ssh/*.pub`
-  do
-    KEY=`cat ${i}`
-    docker exec -t js82 bash -c "echo ${KEY} >> /root/.ssh/authorized_keys" > /tmp/lastcommandoutput.txt 2>&1
-    valid
-  done
-fi
-for user in `curl -s https://raw.githubusercontent.com/Jumpscale/developer/master/scripts/devs`;
-do
-  docker exec -t js82 bash -c "curl -s https://github.com/${user}.keys >> /root/.ssh/authorized_keys" > /tmp/lastcommandoutput.txt 2>&1
-done
-docker exec -t js82 bash -c "chmod 600 /root/.ssh/authorized_keys"> /tmp/lastcommandoutput.txt 2>&1
-valid
-ssh-keygen -f ~/.ssh/known_hosts -R ${ZEROTIERIP} > /tmp/lastcommandoutput.txt 2>&1
-valid
-docker exec -t js82 bash -c 'curl https://raw.githubusercontent.com/Jumpscale/developer/master/mascot > /etc/motd' > /tmp/lastcommandoutput.txt 2>&1
-valid
+    if docker ps -a --format "{{ .Names }}"  | grep -q ubuntu-zerotier; then
+        echo "[+] cleaning up existing container instance"
+        docker rm --force ubuntu-zerotier > ${logfile}
+    fi
+}
 
-echo "Downloading and building jumpscale 8.2"
-docker exec -t js82 bash -c 'cd $TMPDIR && rm -f install.sh && export JSBRANCH="8.2.0" && curl -k https://raw.githubusercontent.com/Jumpscale/jumpscale_core8/$JSBRANCH/install/install.sh?$RANDOM > install.sh && bash install.sh' > /tmp/lastcommandoutput.txt 2>&1
-valid
+docker_ensure_image() {
+    if docker images | grep -q "${dimage}"; then
+        echo "[+] image <${dimage}> found, skipping creation"
+        return
+    fi
 
-if ! grep -q "alias js82='docker exec -it js82 js'" ~/.bashrc; then
-  echo "alias js82='docker exec -it js82 js'" >> ~/.bashrc
-fi
-if ! grep -q "alias ays82='docker exec -it js82 ays'" ~/.bashrc; then
-  echo "alias ays82='docker exec -it js82 ays'" >> ~/.bashrc
-fi
-if ! grep -q "alias js82bash='docker exec -it js82 bash'" ~/.bashrc; then
-  echo "alias js82bash='docker exec -it js82 bash'" >> ~/.bashrc
-fi
+    echo "[+] starting docker container"
+    docker run \
+      --name ubuntu-zerotier \
+      --hostname ubuntu-zerotier \
+      -d --device=/dev/net/tun \
+      --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
+      -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ \
+      -v ${GIGHOME}/code/:/opt/code/ \
+      -v ${GIGHOME}/data/:/optvar/data \
+      phusion/baseimage > ${logfile}
 
-echo "Creating docker image jumpscale/js82"
-docker commit js82 jumpscale/js82 > /tmp/lastcommandoutput.txt 2>&1
-valid
+    echo "[+] downloading script"
+    docker exec -t ubuntu-zerotier curl -s "https://gist.githubusercontent.com/maxux/45282e16d52de6225412c3fbef07628f/raw/f1bcd4e9b64a80151cc95d068957a4acdecc6317/temp-init.sh" -o /tmp/init.sh
 
-echo
-echo "Congratulations, your docker based jumpscale installation is ready!"
-echo "Sandbox is present in the zerotier network ${ZEROTIERNWID} with ip: ${ZEROTIERIP}"
-echo "Run js82, ays82, or js82bash in a new shell to work in your sandbox"
-echo "ssh into your sandbox through ssh root@${ZEROTIERIP}"
-echo
-echo "Recreate a new jumscale docker without rebuilding as follows:"
-echo "  docker rm --force js82; docker run --name js82 -h js82 -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGHOME}/code/:/opt/code/ -v ${GIGHOME}/data/:/optvar/data jumpscale/js82 /root/init.sh ${ZEROTIERNWID}"
+    echo "[+] configuring docker"
+    docker exec -t ubuntu-zerotier bash /tmp/init.sh
+
+    echo "[+] creating docker image jumpscale/ubuntu-zerotier"
+    docker commit ubuntu-zerotier ${dimage} > ${logfile}
+    docker rm --force ubuntu-zerotier > ${logfile}
+}
+
+docker_create_js() {
+    echo "[+] spawning js docker container"
+    docker run \
+      --name js82 \
+      --hostname js82 \
+      -d --device=/dev/net/tun \
+      --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
+      -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ \
+      -v ${GIGHOME}/code/:/opt/code/ \
+      -v ${GIGHOME}/data/:/optvar/data \
+      -e ZEROTIER_NETWORK=${ztnetwork} \
+      jumpscale/ubuntu-zerotier > ${logfile}
+
+    echo "[+] waiting for zerotier network"
+    echo "[ ] (do not forget to allow the container in your network)"
+    echo "[ ] (make sure auto assign ip is enabled)"
+
+    while ! docker exec -t js82 zerotier-cli listnetworks | grep ${ztnetwork} | grep -q ' OK ' > ${logfile}; do
+        sleep 0.2
+    done
+
+    ztaddr=$(docker exec -t js82 zerotier-cli listnetworks | grep ${ztnetwork} | awk '{ print $NF }')
+    ztip=$(echo ${ztaddr} | cut -d'/' -f1)
+    echo -e "[+] container zerotier ip: \033[32;1m${ztaddr}\033[0m"
+
+    if [ $advanced == 0 ]; then
+        echo "[+] cleaning host known_hosts for this target"
+        ssh-keygen -f ~/.ssh/known_hosts -R ${ztip} 2> ${logfile}
+    fi
+
+    echo "[+] downloading and installing jumpscale [$JSBRANCH]"
+    docker exec -t js82 bash -c "rm -f /tmp/install.sh"
+    docker exec -t js82 bash -c "curl -sk https://raw.githubusercontent.com/Jumpscale/jumpscale_core8/$JSBRANCH/install/install.sh?$RANDOM > /tmp/install.sh"
+    # docker exec -t js82 bash -c "export JSBRANCH="${JSBRANCH}" && cd /tmp && bash install.sh" > ${logfile} 2>&1
+
+    if [ $advanced == 0 ]; then
+        echo "[+] installing aliases"
+
+        if ! grep -q "alias js82='docker exec -it js82 js'" ~/.bashrc; then
+            echo "alias js82='docker exec -it js82 js'" >> ~/.bashrc
+        fi
+        if ! grep -q "alias ays82='docker exec -it js82 ays'" ~/.bashrc; then
+            echo "alias ays82='docker exec -it js82 ays'" >> ~/.bashrc
+        fi
+        if ! grep -q "alias js82bash='docker exec -it js82 bash'" ~/.bashrc; then
+            echo "alias js82bash='docker exec -it js82 bash'" >> ~/.bashrc
+        fi
+    fi
+
+    echo "[+] creating docker image: jumpscale/js82"
+    docker commit js82 jumpscale/js82 > ${logfile}
+}
+
+success_message() {
+    echo "[+] ================================"
+    echo -e "[+] \033[32mCongratulations\033[0m, your docker based jumpscale installation is ready !"
+    echo "[+] Sandbox is present in the zerotier network ${ztnetwork} with ip: ${ztip}"
+    # echo "[+] Run js82, ays82, or js82bash in a new shell to work in your sandbox"
+    echo "[+] ssh into your sandbox via: ssh root@${ztip}"
+    # echo "[+] Recreate a new jumscale docker without rebuilding as follows:"
+    # echo "[+]  docker rm --force js82"
+    # echo "[+]  docker run --name js82 -h js82 -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGHOME}/code/:/opt/code/ -v ${GIGHOME}/data/:/optvar/data jumpscale/js82"
+    echo "[+] ================================"
+}
+
+main() {
+
+    while getopts ":z:hg:vy" opt; do
+        case $opt in
+            z) ztnetwork=$OPTARG ;;
+            h) show_usage ;;
+            y) ask=0 ;;
+            v)
+                verbose=1
+                logfile="/proc/self/fd/1"
+                ;;
+            a) advanced=1 ;;
+            :)
+                echo "[-] option -$OPTARG requires an argument" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    if [ "$ztnetwork" == "" ]; then
+        echo "[-] Zerotier Network is required (-z option)"
+        exit 1
+    fi
+
+    echo "============================"
+    echo "== Grid Deployment Script =="
+    echo "============================"
+    echo ""
+
+    info "GIG Home Path" $GIGPATH
+    info "ZeroTier Network" $ztnetwork
+
+    if [ $verbose == 1 ]; then
+        info "Verbose mode" "enabled"
+    fi
+
+    if [ $verbose == 1 ]; then
+        info "Advanced mode" "enabled"
+    fi
+
+    echo ""
+    if [ $ask == 1 ]; then
+        echo "Press ENTER to continue, hit CTRL+C to cancel"
+        read
+    fi
+
+    echo "[+] preliminary checks"
+    home_ensure
+
+    echo "[+] preparing environment"
+    docker_prepare
+    docker_ensure_image
+    docker_create_js
+    success_message
+}
+
+trap 'error_handler $LINENO' ERR
+
+load_settings
+main "$@"
