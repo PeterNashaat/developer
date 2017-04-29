@@ -109,7 +109,7 @@ docker_ensure_image() {
     docker exec -t ubuntu-zerotier curl -s "https://raw.githubusercontent.com/Jumpscale/developer/refactor/scripts/js_builder82_zerotier-docker.sh" -o /tmp/init.sh
 
     echo "[+] configuring docker"
-    docker exec -t ubuntu-zerotier bash /tmp/init.sh
+    docker exec -t ubuntu-zerotier bash /tmp/init.sh ${logfile}
 
     echo "[+] creating docker image jumpscale/ubuntu-zerotier"
     docker commit ubuntu-zerotier ${dimage} > ${logfile}
@@ -149,7 +149,7 @@ docker_create_js() {
     echo "[+] downloading and installing jumpscale [$JSBRANCH]"
     docker exec -t js82 bash -c "rm -f /tmp/install.sh"
     docker exec -t js82 bash -c "curl -sk https://raw.githubusercontent.com/Jumpscale/jumpscale_core8/$JSBRANCH/install/install.sh?$RANDOM > /tmp/install.sh"
-    # docker exec -t js82 bash -c "export JSBRANCH="${JSBRANCH}" && cd /tmp && bash install.sh" > ${logfile} 2>&1
+    docker exec -t js82 bash -c "export JSBRANCH="${JSBRANCH}" && cd /tmp && bash install.sh" > ${logfile} 2>&1
 
     if [ $advanced == 0 ]; then
         echo "[+] installing aliases"
