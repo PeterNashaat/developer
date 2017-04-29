@@ -106,7 +106,7 @@ docker_ensure_image() {
       phusion/baseimage > ${logfile}
 
     echo "[+] downloading script"
-    docker exec -t ubuntu-zerotier curl -s "https://gist.githubusercontent.com/maxux/45282e16d52de6225412c3fbef07628f/raw/f1bcd4e9b64a80151cc95d068957a4acdecc6317/temp-init.sh" -o /tmp/init.sh
+    docker exec -t ubuntu-zerotier curl -s "https://raw.githubusercontent.com/Jumpscale/developer/refactor/scripts/js_builder82_zerotier-docker.sh" -o /tmp/init.sh
 
     echo "[+] configuring docker"
     docker exec -t ubuntu-zerotier bash /tmp/init.sh

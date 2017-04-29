@@ -48,8 +48,8 @@ echo "[+]   configuring zerotier"
 ztinit="/etc/my_init.d/10_zerotier.sh"
 
 echo '#!/bin/bash -x' > ${ztinit}
-#echo '[ $ZEROTIER_RESET == 1 ] && rm -f /var/lib/zerotier-one/identity.public' >> ${ztinit}
-#echo '[ $ZEROTIER_RESET == 1 ] && rm -f /var/lib/zerotier-one/identity.secret' >> ${ztinit}
+# echo '[ $ZEROTIER_RESET == 1 ] && rm -f /var/lib/zerotier-one/identity.public' >> ${ztinit}
+# echo '[ $ZEROTIER_RESET == 1 ] && rm -f /var/lib/zerotier-one/identity.secret' >> ${ztinit}
 echo 'zerotier-one -d' >> ${ztinit}
 echo 'while ! zerotier-cli info > /dev/null 2>&1; do sleep 0.1; done' >> ${ztinit}
 echo '[ "$ZEROTIER_NETWORK" != "" ] && zerotier-cli join $ZEROTIER_NETWORK' >> ${ztinit}
