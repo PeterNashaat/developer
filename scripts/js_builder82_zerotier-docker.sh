@@ -41,7 +41,8 @@ echo "[+]   authorizing users"
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 for user in $(curl -s https://raw.githubusercontent.com/Jumpscale/developer/master/scripts/devs); do
-    curl https://github.com/${user}.keys >> /root/.ssh/authorized_keys 2> ${logfile}
+    echo "[+]      authorizing $user" > ${logfile}
+    curl https://github.com/${user}.keys >> /root/.ssh/authorized_keys
 done
 
 echo "[+]   configuring zerotier"
