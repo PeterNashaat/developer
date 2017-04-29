@@ -173,7 +173,7 @@ success_message() {
     echo "[+] ================================"
     echo -e "[+] \033[32mCongratulations\033[0m, your docker based jumpscale installation is ready !"
     echo "[+] Sandbox is present in the zerotier network ${ztnetwork} with ip: ${ztip}"
-    # echo "[+] Run js82, ays82, or js82bash in a new shell to work in your sandbox"
+    echo "[+] Run js82, ays82, or js82bash in a new shell to work in your sandbox"
     echo "[+] ssh into your sandbox via: ssh root@${ztip}"
     # echo "[+] Recreate a new jumscale docker without rebuilding as follows:"
     # echo "[+]  docker rm --force js82"
