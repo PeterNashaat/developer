@@ -67,13 +67,13 @@ load_settings() {
 }
 
 home_ensure() {
-    mkdir -p ${GIGHOME}/data
-    mkdir -p ${GIGHOME}/code
-    mkdir -p ${GIGHOME}/zerotier-one
+    mkdir -p ${GIGPATH}/data
+    mkdir -p ${GIGPATH}/code
+    mkdir -p ${GIGPATH}/zerotier-one
 
-    [ -w ${GIGHOME}/data/ ] || die "No write access to ${GIGHOME}/data"
-    [ -w ${GIGHOME}/code/ ] || die "No write access to ${GIGHOME}/code"
-    [ -w ${GIGHOME}/zerotier-one/ ] || die "No write access to ${GIGHOME}/zerotier-one"
+    [ -w ${GIGPATH}/data/ ] || die "No write access to ${GIGPATH}/data"
+    [ -w ${GIGPATH}/code/ ] || die "No write access to ${GIGPATH}/code"
+    [ -w ${GIGPATH}/zerotier-one/ ] || die "No write access to ${GIGPATH}/zerotier-one"
 }
 
 docker_prepare() {
@@ -100,9 +100,9 @@ docker_ensure_image() {
       --hostname ubuntu-zerotier \
       -d --device=/dev/net/tun \
       --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
-      -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ \
-      -v ${GIGHOME}/code/:/opt/code/ \
-      -v ${GIGHOME}/data/:/optvar/data \
+      -v ${GIGPATH}/zerotier-one/:/var/lib/zerotier-one/ \
+      -v ${GIGPATH}/code/:/opt/code/ \
+      -v ${GIGPATH}/data/:/optvar/data \
       phusion/baseimage > ${logfile}
 
     echo "[+] downloading script"
@@ -123,9 +123,9 @@ docker_create_js() {
       --hostname js82 \
       -d --device=/dev/net/tun \
       --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
-      -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ \
-      -v ${GIGHOME}/code/:/opt/code/ \
-      -v ${GIGHOME}/data/:/optvar/data \
+      -v ${GIGPATH}/zerotier-one/:/var/lib/zerotier-one/ \
+      -v ${GIGPATH}/code/:/opt/code/ \
+      -v ${GIGPATH}/data/:/optvar/data \
       -e ZEROTIER_NETWORK=${ztnetwork} \
       jumpscale/ubuntu-zerotier > ${logfile}
 
@@ -177,7 +177,7 @@ success_message() {
     echo "[+] ssh into your sandbox via: ssh root@${ztip}"
     # echo "[+] Recreate a new jumscale docker without rebuilding as follows:"
     # echo "[+]  docker rm --force js82"
-    # echo "[+]  docker run --name js82 -h js82 -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGHOME}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGHOME}/code/:/opt/code/ -v ${GIGHOME}/data/:/optvar/data jumpscale/js82"
+    # echo "[+]  docker run --name js82 -h js82 -d --device=/dev/net/tun --cap-add=NET_ADMIN --cap-add=SYS_ADMIN -v ${GIGPATH}/zerotier-one/:/var/lib/zerotier-one/ -v ${GIGPATH}/code/:/opt/code/ -v ${GIGPATH}/data/:/optvar/data jumpscale/js82"
     echo "[+] ================================"
 }
 
