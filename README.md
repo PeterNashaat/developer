@@ -119,3 +119,5 @@ python3 -c "from JumpScale.init import j;from IPython import embed;embed()"
 ```
 curl https://raw.githubusercontent.com/Jumpscale/developer/master/scripts/osx_reset_all.sh?$RANDOM > $TMPDIR/resetall.sh;bash $TMPDIR/resetall.sh
 ```
+
+
